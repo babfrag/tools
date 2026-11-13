@@ -81,5 +81,18 @@ check "cred-rm conserve les autres" 1 "$(grep -c 'vm-abc-dev01/DEV/root' "$TOOLS
 cred-rm vm-abc-dev01 appli > /dev/null 2>&1
 check "cred-rm : user introuvable" 1 $?
 
+# --- menu navigable (touches simulées)
+nav() { local keys=$1; shift; _tools_menu_nav T "$@" < <(printf "$keys") 2>/dev/null; }
+check "nav : ↓ ↓ Entrée"                 c "$(nav '\e[B\e[B\n' a b c)"
+check "nav : ↑ en haut reste en haut"    a "$(nav '\e[A\n' a b c)"
+check "nav : ↓ bloqué en fin de liste"   c "$(nav '\e[B\e[B\e[B\e[B\n' a b c)"
+check "nav : Fin puis Début"             a "$(nav '\e[F\e[H\n' a b c)"
+check "nav : filtre texte"               DEV2 "$(nav 'v2\n' DEV DEV2 VAL)"
+check "nav : filtre puis ↓"              VAL "$(nav 'v\e[B\e[B\n' DEV DEV2 VAL)"
+check "nav : retour arrière"             DEV "$(nav 'x\x7f\n' DEV VAL)"
+check "nav : Entrée sans résultat ignorée" VAL "$(nav 'zz\n\x7f\x7fVAL\n' DEV VAL)"
+nav '\e' a b > /dev/null
+check "nav : Échap annule" 1 $?
+
 echo "--- $PASS ok, $FAIL échec(s)"
 (( FAIL == 0 ))

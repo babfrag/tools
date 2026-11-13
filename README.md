@@ -42,14 +42,19 @@ Les mots-clés filtrent sur `CIA/host/ENV/user`, sans tenir compte de la casse. 
 
 ### Sélection interactive (`cx`)
 
-`cx` propose successivement **Code CIA → Environnement → Machine → User**. Une étape n'ayant qu'un seul choix possible est sautée. À chaque menu, on peut saisir :
+`cx` propose successivement **Code CIA → Environnement → Machine → User**. Une étape n'ayant qu'un seul choix possible est sautée.
 
-- un **numéro** ;
-- la **valeur exacte** (ex. `DEV`) ;
-- un **texte** qui réduit la liste (ex. `ab`), et qui est choisi directement s'il ne reste qu'une valeur ;
-- **rien** pour annuler.
+| Touche | Action |
+|---|---|
+| ↑ / ↓, PgPréc / PgSuiv, Début / Fin | Se déplacer |
+| **Entrée** | Choisir |
+| Lettres / chiffres | Filtrer la liste en direct (ex. `ab`) |
+| Retour arrière | Effacer le filtre |
+| Échap | Annuler |
 
 Les mots-clés passés à `cx` pré-filtrent les menus : `cx abc` démarre directement au choix de l'environnement.
+
+Si le terminal gère mal les flèches, `export TOOLS_MENU=text` repasse en menus numérotés : saisir un numéro, une valeur ou un texte de filtre, et une saisie vide annule. Ce mode est aussi utilisé automatiquement quand l'entrée n'est pas un terminal.
 
 ## Configuration
 
@@ -60,6 +65,7 @@ Variables à définir dans `~/.bashrc`, **avant** la ligne qui charge `tools` :
 | `TOOLS_CRED_FILE` | `~/.bpce_credentials` | Fichier de credentials |
 | `TOOLS_CLIP_TIMEOUT` | `30` | Délai (s) avant l'effacement du presse-papier (`0` = jamais) |
 | `TOOLS_SSH_OPTS` | `-o PubkeyAuthentication=no -o StrictHostKeyChecking=accept-new` | Options passées à `ssh` |
+| `TOOLS_MENU` | `auto` | `text` pour des menus numérotés au lieu du menu navigable |
 
 ## Structure
 

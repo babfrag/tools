@@ -12,6 +12,7 @@
 TOOLS_CRED_FILE="${TOOLS_CRED_FILE:-$HOME/.bpce_credentials}"
 TOOLS_CLIP_TIMEOUT="${TOOLS_CLIP_TIMEOUT:-30}"   # secondes avant effacement (0 = jamais)
 TOOLS_SSH_OPTS="${TOOLS_SSH_OPTS:--o PubkeyAuthentication=no -o StrictHostKeyChecking=accept-new}"
+TOOLS_MENU="${TOOLS_MENU:-auto}"                 # auto | text (menus numérotés)
 
 # ---------------------------------------------------------------- utilitaires
 _tools_err() { printf '\e[31m%s\e[0m\n' "$*" >&2; }
@@ -74,13 +75,95 @@ vm() {
 }
 
 # Menu interactif : _tools_menu <titre> <valeurs...>
-# Affiche le menu sur stderr et écrit la valeur choisie sur stdout.
-# Saisie : un numéro, la valeur exacte, ou un texte qui réduit la liste.
-# Une seule valeur => choisie sans question. Saisie vide => annulation.
+# Écrit la valeur choisie sur stdout (menus affichés sur stderr), code 1 si annulé.
+# Une seule valeur => choisie sans question.
 _tools_menu() {
+  (( $# == 2 )) && { printf '%s\n' "$2"; return 0; }
+  if [[ $TOOLS_MENU != text && -t 0 && -t 2 ]]; then
+    _tools_menu_nav "$@"
+  else
+    _tools_menu_text "$@"
+  fi
+}
+
+# Menu navigable : ↑/↓ (PgUp/PgDn, Début/Fin), Entrée = choisir, Échap = annuler,
+# texte = filtre en direct, Retour arrière = effacer le filtre.
+# Corps entre ( ) : sous-shell, pour que les traps restent locaux au menu.
+_tools_menu_nav() (
+  local title=$1; shift
+  local all=("$@") items=() filter='' sel=0 top=0 drawn=0 max key seq i item
+
+  max=$(( ${LINES:-24} - 4 ))
+  (( max > 15 )) && max=15
+  (( max < 3 )) && max=3
+
+  _clear() { (( drawn )) && printf '\e[%dA' "$drawn" >&2; printf '\r\e[J' >&2; drawn=0; }
+  trap 'printf "\e[?25h" >&2' EXIT          # réaffiche toujours le curseur
+  trap '_clear; exit 130' INT
+  printf '\e[?25l' >&2                      # cache le curseur pendant la navigation
+
+  while :; do
+    items=()
+    for item in "${all[@]}"; do
+      [[ ${item,,} == *"${filter,,}"* ]] && items+=("$item")
+    done
+    (( sel >= ${#items[@]} )) && sel=$(( ${#items[@]} - 1 ))
+    (( sel < 0 )) && sel=0
+    (( sel < top )) && top=$sel
+    (( sel >= top + max )) && top=$(( sel - max + 1 ))
+
+    _clear
+    {
+      printf '\e[1m%s\e[0m \e[2m(↑↓ Entrée · taper pour filtrer · Échap annule)\e[0m\n' "$title"
+      printf '  \e[36mFiltre : %s\e[0m\n' "$filter"
+      drawn=2
+      for (( i = top; i < top + max && i < ${#items[@]}; i++ )); do
+        if (( i == sel )); then
+          printf '\e[7m > %s \e[0m\n' "${items[i]}"
+        else
+          printf '   %s\n' "${items[i]}"
+        fi
+        drawn=$(( drawn + 1 ))
+      done
+      if (( ${#items[@]} == 0 )); then
+        printf '   \e[2m(aucun résultat)\e[0m\n'; drawn=$(( drawn + 1 ))
+      elif (( ${#items[@]} > max )); then
+        printf '   \e[2m%d/%d\e[0m\n' $(( sel + 1 )) ${#items[@]}; drawn=$(( drawn + 1 ))
+      fi
+    } >&2
+
+    IFS= read -rsn1 key || exit 1           # fin d'entrée = annulation
+    case $key in
+      '')                                     # Entrée
+        (( ${#items[@]} )) || continue
+        _clear
+        printf '%s : \e[1m%s\e[0m\n' "$title" "${items[sel]}" >&2
+        printf '%s\n' "${items[sel]}"
+        exit 0 ;;
+      $'\e')                                  # Échap seul ou séquence de touche spéciale
+        seq=''
+        IFS= read -rsn2 -t 0.05 seq
+        case $seq in
+          '[A'|'OA') sel=$(( sel - 1 )) ;;
+          '[B'|'OB') sel=$(( sel + 1 )) ;;
+          '[H'|'OH') sel=0 ;;
+          '[F'|'OF') sel=$(( ${#items[@]} - 1 )) ;;
+          '[5') read -rsn1 -t 0.05; sel=$(( sel - max )) ;;
+          '[6') read -rsn1 -t 0.05; sel=$(( sel + max )) ;;
+          '') _clear; exit 1 ;;
+        esac ;;
+      $'\x7f'|$'\b') filter=${filter%?}; sel=0 ;;
+      [[:print:]]) filter+=$key; sel=0 ;;
+    esac
+  done
+)
+
+# Menu numéroté (terminal non interactif ou TOOLS_MENU=text).
+# Saisie : un numéro, la valeur exacte, ou un texte qui réduit la liste.
+# Saisie vide => annulation.
+_tools_menu_text() {
   local title=$1; shift
   local items=("$@") filtered=() item input i
-  (( ${#items[@]} == 1 )) && { printf '%s\n' "${items[0]}"; return 0; }
 
   while :; do
     printf '\e[1m%s\e[0m\n' "$title" >&2
