@@ -32,13 +32,24 @@ ABC/vm-abc-dev01/DEV/appli/AutreMotDePasse
 | Commande | Description |
 |---|---|
 | `vm [mots-clés]` | Liste les VM et les users (sans mot de passe), ex. `vm abc dev` |
-| `cx [mots-clés]` | Se connecte en SSH, avec un menu si plusieurs résultats. Le mot de passe est copié dans le presse-papier : collez-le avec **Shift+Inser** ou clic droit. |
+| `cx [mots-clés]` | Se connecte en SSH après une sélection interactive (voir ci-dessous). Le mot de passe est copié dans le presse-papier : collez-le avec **Shift+Inser** ou clic droit. |
 | `cred-add` | Ajoute ou met à jour un user sur une VM (saisie masquée) |
 | `cred-rm <host> <user>` | Supprime un user d'une VM |
 | `cred-edit` | Ouvre le fichier de credentials |
 | `tools-help` | Aide |
 
 Les mots-clés filtrent sur `CIA/host/ENV/user`, sans tenir compte de la casse. Ils se combinent : `cx abc val root`.
+
+### Sélection interactive (`cx`)
+
+`cx` propose successivement **Code CIA → Environnement → Machine → User**. Une étape n'ayant qu'un seul choix possible est sautée. À chaque menu, on peut saisir :
+
+- un **numéro** ;
+- la **valeur exacte** (ex. `DEV`) ;
+- un **texte** qui réduit la liste (ex. `ab`), et qui est choisi directement s'il ne reste qu'une valeur ;
+- **rien** pour annuler.
+
+Les mots-clés passés à `cx` pré-filtrent les menus : `cx abc` démarre directement au choix de l'environnement.
 
 ## Configuration
 

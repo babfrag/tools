@@ -59,6 +59,21 @@ check "cx : choix hors limites refusé" 1 $?
 cx inexistant > /dev/null 2>&1
 check "cx : aucune VM" 1 $?
 
+# --- cx : sélection CIA > ENV > machine > user
+add abc vm-abc-ver01 ver root v v
+add abc vm-abc-dev02 dev root d2 d2
+cx < <(printf '%s\n' 1 dev 1 appli) > /dev/null 2>&1
+check "cx : numéro CIA, texte ENV, numéro machine, texte user" "appli@vm-abc-dev01" "$(cat "$TMP/ssh")"
+cx < <(printf '%s\n' abc ver) > /dev/null 2>&1
+check "cx : machine et user uniques choisis sans question" "root@vm-abc-ver01" "$(cat "$TMP/ssh")"
+cx abc dev < <(printf '%s\n' dev02) > /dev/null 2>&1
+check "cx : mots-clés puis filtre texte sur la machine" "root@vm-abc-dev02" "$(cat "$TMP/ssh")"
+cx < <(printf '%s\n' xyz VAL) > /dev/null 2>&1
+check "cx : valeur exacte saisie" "root@vm-xyz-val01" "$(cat "$TMP/ssh")"
+rm -f "$TMP/ssh"
+cx < <(printf '\n') > /dev/null 2>&1
+check "cx : saisie vide = annulation" "1-absent" "$?-$([[ -f $TMP/ssh ]] && echo present || echo absent)"
+
 # --- cred-rm
 cred-rm vm-abc-dev01 appli > /dev/null
 check "cred-rm supprime le bon user" 0 "$(grep -c '/appli/' "$TOOLS_CRED_FILE")"

@@ -73,19 +73,68 @@ vm() {
   _tools_print_list
 }
 
-# cx [mots-clés...] : choisit une VM + user, copie le mot de passe et lance ssh
+# Menu interactif : _tools_menu <titre> <valeurs...>
+# Affiche le menu sur stderr et écrit la valeur choisie sur stdout.
+# Saisie : un numéro, la valeur exacte, ou un texte qui réduit la liste.
+# Une seule valeur => choisie sans question. Saisie vide => annulation.
+_tools_menu() {
+  local title=$1; shift
+  local items=("$@") filtered=() item input i
+  (( ${#items[@]} == 1 )) && { printf '%s\n' "${items[0]}"; return 0; }
+
+  while :; do
+    printf '\e[1m%s\e[0m\n' "$title" >&2
+    for i in "${!items[@]}"; do
+      printf '%3d) %s\n' $((i + 1)) "${items[i]}"
+    done | column -c "${COLUMNS:-100}" >&2
+    read -rp "Numéro ou texte (vide = annuler) : " input || return 1
+    [[ -n $input ]] || return 1
+
+    if [[ $input =~ ^[0-9]+$ ]]; then
+      if (( input >= 1 && input <= ${#items[@]} )); then
+        printf '%s\n' "${items[input - 1]}"; return 0
+      fi
+      _tools_err "Choix invalide : $input"; continue
+    fi
+
+    filtered=()
+    for item in "${items[@]}"; do
+      [[ ${item,,} == "${input,,}" ]] && { printf '%s\n' "$item"; return 0; }
+      [[ ${item,,} == *"${input,,}"* ]] && filtered+=("$item")
+    done
+    case ${#filtered[@]} in
+      0) _tools_err "Aucune correspondance : $input" ;;
+      1) printf '%s\n' "${filtered[0]}"; return 0 ;;
+      *) items=("${filtered[@]}") ;;
+    esac
+  done
+}
+
+# Étape de sélection : _tools_step <titre> <tableau _VM_*>
+# Propose les valeurs distinctes de la colonne parmi les lignes _SEL,
+# puis ne garde dans _SEL que les lignes correspondant au choix.
+_tools_step() {
+  local -n _col=$2
+  local i choice values=() keep=()
+  mapfile -t values < <(for i in "${_SEL[@]}"; do printf '%s\n' "${_col[i]}"; done | sort -u)
+  choice=$(_tools_menu "$1" "${values[@]}") || { _tools_err "Annulé"; return 1; }
+  for i in "${_SEL[@]}"; do
+    [[ ${_col[i]} == "$choice" ]] && keep+=("$i")
+  done
+  _SEL=("${keep[@]}")
+}
+
+# cx [mots-clés...] : sélection CIA > ENV > machine > user, copie le mot de passe et lance ssh
 cx() {
   _tools_load "$@" || return 1
-  local count=${#_VM_HOST[@]} i=0 choice
-  (( count )) || { _tools_err "Aucune VM ne correspond : $*"; return 1; }
+  (( ${#_VM_HOST[@]} )) || { _tools_err "Aucune VM ne correspond : $*"; return 1; }
 
-  if (( count > 1 )); then
-    _tools_print_list
-    read -rp "Numéro (1-$count) : " choice
-    [[ $choice =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= count )) \
-      || { _tools_err "Choix invalide"; return 1; }
-    i=$((choice - 1))
-  fi
+  _SEL=("${!_VM_HOST[@]}")
+  _tools_step "Code CIA"      _VM_CIA  || return 1
+  _tools_step "Environnement" _VM_ENV  || return 1
+  _tools_step "Machine"       _VM_HOST || return 1
+  _tools_step "User"          _VM_USER || return 1
+  local i=${_SEL[0]}
 
   _tools_clip "${_VM_PASS[i]}"
   _tools_info "[${_VM_ENV[i]}] ${_VM_CIA[i]} ${_VM_USER[i]}@${_VM_HOST[i]}"
